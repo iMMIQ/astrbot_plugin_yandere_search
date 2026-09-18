@@ -1,0 +1,181 @@
+{
+  "admin_users": {
+    "type": "text",
+    "description": "插件管理员 QQ 号（逗号/空格分隔）。/搜图设置 /订阅 /退订 /搜图模式 与 r18 解锁以此为准；AstrBot 管理员自动兼容。留空则仅 AstrBot 管理员可用",
+    "default": ""
+  },
+  "api_url": {
+    "type": "string",
+    "description": "yande.re 站点地址",
+    "default": "https://yande.re"
+  },
+  "proxy_url": {
+    "type": "string",
+    "description": "HTTP(S) 出站代理地址（如 http://192.168.x.x:7890）。图站 API 与图片 CDN 在国内网络通常需代理；留空则直连",
+    "default": ""
+  },
+  "default_rating": {
+    "type": "string",
+    "description": "私聊与无覆盖会话的默认分级：s=全年龄 / q=擦边 / e=明确涩图。群聊上限另见 group_rating_cap",
+    "default": "s",
+    "options": ["s", "q", "e"]
+  },
+  "group_rating_cap": {
+    "type": "string",
+    "description": "群聊会话的默认分级上限；管理员可用 /搜图设置 rating 按会话覆盖（开到 e 需 r18_whitelist）",
+    "default": "s",
+    "options": ["s", "q", "e"]
+  },
+  "r18_whitelist": {
+    "type": "text",
+    "description": "允许开 e 级的会话标识（unified_msg_origin，逗号分隔）；也可不配，管理员在会话里发 /搜图设置 r18 on 一键解锁（存本地库，二者并集生效）",
+    "default": ""
+  },
+  "cooldown_seconds": {
+    "type": "int",
+    "description": "会话命令冷却（秒），管理员不受限；可被 /搜图设置 冷却 按会话覆盖",
+    "default": 8
+  },
+  "daily_quota": {
+    "type": "int",
+    "description": "每人每日图片配额（张）；可被 /搜图设置 配额 按会话覆盖",
+    "default": 80
+  },
+  "max_images": {
+    "type": "int",
+    "description": "单次命令最多发送图片张数（1-5）",
+    "default": 3,
+    "hint": "1-5"
+  },
+  "image_quality": {
+    "type": "string",
+    "description": "下载档位：original=原图 / large=压缩档 / preview=缩略图最快。开启转码且 auto_sample 时 original 会自动取样图",
+    "default": "original",
+    "options": ["original", "large", "preview"]
+  },
+  "auto_sample": {
+    "type": "bool",
+    "description": "智能取样：转码开启且目标 ≤1600px 时，original 档自动改取 jpeg 样本图（小 5-20 倍，画质无可感差异，大幅降低响应耗时）",
+    "default": true
+  },
+  "download_timeout": {
+    "type": "int",
+    "description": "单张图片下载时长下限（秒）；实际按文件大小自适应延长（最多 90s），超时先换池内备胎、最后才发预览缩略图（回显会标注）",
+    "default": 30
+  },
+  "convert_enabled": {
+    "type": "bool",
+    "description": "本地转码：落盘与发送前统一转为 WebP（强烈建议开启）",
+    "default": true
+  },
+  "convert_max_px": {
+    "type": "int",
+    "description": "转码后长边最大像素（只缩不放）",
+    "default": 1080
+  },
+  "convert_quality": {
+    "type": "int",
+    "description": "WebP 质量（0-100）",
+    "default": 95
+  },
+  "forward_threshold": {
+    "type": "int",
+    "description": "图片数达到该值时用合并转发发送（0=关闭；仅 aiocqhttp，失败自动回退逐张）",
+    "default": 3
+  },
+  "extra_sites": {
+    "type": "text",
+    "description": "额外启用的 Moebooru 图源，逗号分隔：konachan, konachan_net（默认仅 yandere；用户用 site:konachan 切换）",
+    "default": ""
+  },
+  "fallback_sites": {
+    "type": "text",
+    "description": "国内回退图源（yande.re 慢/挂时的竞速保底）：lolicon = Lolicon API(pixiv 库, 国内直连)。留空关闭。回退命中回显 [Lolicon·pixiv]",
+    "default": "lolicon"
+  },
+  "fallback_headstart": {
+    "type": "int",
+    "description": "回退源起跑等待（秒）：主源超过该时长未交付就并行起国内源，谁先出图用谁",
+    "default": 8
+  },
+  "deadline_seconds": {
+    "type": "int",
+    "description": "单次搜图全局截止（秒）：搜索/下载预算都被钳制在其内，超时降级预览档或回退源，保证准点出图",
+    "default": 24
+  },
+  "lolicon_api_key": {
+    "type": "string",
+    "description": "Lolicon API Key（api.lolicon.app，可选，无 key 有基础限额）",
+    "default": ""
+  },
+  "reverse_enabled": {
+    "type": "bool",
+    "description": "以图搜图（/搜原图）：SauceNAO → iqdb 链式反查出处",
+    "default": true
+  },
+  "saucenao_api_key": {
+    "type": "string",
+    "description": "SauceNAO API Key（saucenao.com 免费注册；无 key 也能用但额度更低且易被短时限流）",
+    "default": ""
+  },
+  "saucenao_daily_limit": {
+    "type": "int",
+    "description": "SauceNAO 每日调用上限（无 key 建议 30，有免费 key 可设 100），超限自动只用 iqdb",
+    "default": 30
+  },
+  "iqdb_enabled": {
+    "type": "bool",
+    "description": "iqdb.org 兜底反搜开关（booru 精确匹配率高，无需注册）",
+    "default": true
+  },
+  "llm_fallback": {
+    "type": "bool",
+    "description": "中文长句未命中词表时，用 AstrBot 内置 LLM 翻译成标签（输出必须过本地词表值域校验，防幻觉）",
+    "default": false
+  },
+  "embed_enabled": {
+    "type": "bool",
+    "description": "语义标签匹配：词表未命中的中文词自动走向量召回+重排（bge-m3/bge-reranker，语料=yande.re 全站有效标签索引）。端点自动复用 AstrBot 已配置的 openai_embedding / vllm_rerank provider，索引缺失或服务不可用时自动回退纯词表",
+    "default": true
+  },
+  "embed_api_url": {
+    "type": "string",
+    "description": "嵌入服务 OpenAI 兼容地址（含 /v1）。留空=自动用 AstrBot 的 openai_embedding provider",
+    "default": ""
+  },
+  "embed_api_key": {
+    "type": "string",
+    "description": "嵌入服务 API Key（自动发现时无需填）",
+    "default": ""
+  },
+  "embed_model": {
+    "type": "string",
+    "description": "嵌入模型名（自动发现时无需填；必须与建索引所用模型一致，否则语义匹配自动关闭）",
+    "default": ""
+  },
+  "embed_topk": {
+    "type": "int",
+    "description": "余弦召回进入重排的候选数（两概念复合词的正确标签可能排到百名开外，建议 ≥100）",
+    "default": 200
+  },
+  "embed_min_score": {
+    "type": "float",
+    "description": "重排分数采纳阈值（0-1）。实测：正确配对 >0.85，语义相邻但偏差 0.6-0.7，错误 <0.3；调低更激进、调高更保守",
+    "default": 0.7
+  },
+  "rerank_enabled": {
+    "type": "bool",
+    "description": "召回结果用 bge-reranker 重排（强烈建议开启，中文→英文标签精度主要靠它）",
+    "default": true
+  },
+  "rerank_api_url": {
+    "type": "string",
+    "description": "重排服务地址（jina/vLLM 风格 rerank 端点）。留空=自动用 AstrBot 的 vllm_rerank provider",
+    "default": ""
+  },
+  "request_timeout": {
+    "type": "int",
+    "description": "请求超时（秒）",
+    "default": 15
+  }
+}

@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.DS_Store
+tools/.build_cache/
+# 语义索引体积大(约 75MB)不入库，用 tools/build_embed_index.py 自建（见 README）
+tag_index.npz
+tag_index_meta.json
