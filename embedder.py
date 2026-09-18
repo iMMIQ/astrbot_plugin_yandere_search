@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 """语义标签匹配（RAG）：词表未命中的中文词 → bge-m3 向量召回 → bge-reranker-v2-m3 重排。
 
 沿用 tagger.py 的哲学：模型只产候选，本地有效集做裁判——索引语料就是 yande.re

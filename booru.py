@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 """Moebooru 图站客户端（yande.re / konachan 系）：纯 httpx 实现，不依赖 astrbot。
 
 Moebooru 特性：

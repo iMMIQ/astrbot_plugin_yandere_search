@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 """图片本地转码：原图 -> WebP（限制长边、质量参数可配）。"""
 
 from __future__ import annotations

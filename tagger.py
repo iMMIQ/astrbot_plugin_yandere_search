@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 """LLM 自然语言 -> yande.re 标签：LLM 只产候选，词表值域做裁判。
 
 触发条件（main 侧控制）：查询里没有任何词表命中的中文词、且包含 CJK 字符。

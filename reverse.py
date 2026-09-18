@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 """以图搜图：SauceNAO(JSON API) 为主，iqdb.org 网页解析兜底。不依赖 astrbot。
 
 - SauceNAO 免费注册 api key 后约 100 次/天；无 key 也能用但额度更低且有短时限流。

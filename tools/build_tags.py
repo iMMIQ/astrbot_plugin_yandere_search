@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 #!/usr/bin/env python3
 """重建 tags_zh.json —— yande.re 校准中文标签词表。
 

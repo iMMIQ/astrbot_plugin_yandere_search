@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 """订阅推送：插件内 asyncio 调度循环（30s 粒度）+ context.send_message 主动推送。
 
 AstrBot 框架没有内置的插件定时装饰器，所以在 __init__ 里 create_task 启动本循环、

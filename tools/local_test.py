@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 #!/usr/bin/env python3
 """本地假事件栈 E2E：不安装 AstrBot 也能驱动插件全部能力。
 

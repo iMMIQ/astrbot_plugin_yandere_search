@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 """Lolicon API（pixiv 库）——yande.re 的国内回退图源。
 
 端点 https://api.lolicon.app/setu/v2（2026-09 实测已从 /api/v2/setu 迁移），

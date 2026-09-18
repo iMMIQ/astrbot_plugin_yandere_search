@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 #!/usr/bin/env python3
 """构建语义标签索引 tag_index.npz —— 供 embedder.py 做中文→yande.re 标签的向量召回。
 

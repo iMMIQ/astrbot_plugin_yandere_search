@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
 """会话治理与状态持久化：sqlite(WAL) 单文件，无第三方依赖。
 
 承载：会话设置（分级上限/冷却/配额/转发/开关/搜图模式）、命令冷却与每日配额、
