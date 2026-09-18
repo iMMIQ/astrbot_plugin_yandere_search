@@ -92,6 +92,7 @@ class SubScheduler:
         if not paths:
             log.warning(f"[yandere] 订阅 #{sub['id']} 图片全部下载失败")
             return
+        paths = await self.p._jitter_paths(paths)
 
         echo = header + "\n" + " ".join(f"#{p['id']}(⭐{p.get('score', 0)})" for p in posts[: len(paths)])
         chain = MessageChain().message(echo)

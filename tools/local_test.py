@@ -9,7 +9,8 @@
   A. 单元: _parse 全语法 / _rating_cap 群私聊矩阵 / 词表翻译 / LLM 校验
   B. 离线命令流(StubBooru): 连写重试 / 空结果双诊断 / 热门跨天回补 /
      下一张游标推进与耗尽 / 收藏越界 / 订阅推送去重·空推·失败
-  B18/B19. 嵌入语义层 / 连写拆词；B20. 国内源回退竞速；B21. 默认分级范围
+  B18/B19. 嵌入语义层 / 连写拆词；B20. 国内源回退竞速；B21. 默认分级范围；
+  B22. 发送前扰动（防拦截）
   C. 治理: 白名单 e / 冷却·配额管理员豁免 / 总开关 / 历史 TTL
   D. 反搜(MockTransport): SauceNAO 解析 / iqdb multipart+解析 / 去重合并 /
      CF 退避 / 每日配额门 / 命中本站自动补图(分级门)
@@ -1719,6 +1720,97 @@ async def rating_range_tests(plugin):
         plugin._clients.pop("lolicon", None)
 
 
+# ---------------- B22. 发送前扰动（防拦截） ----------------
+
+async def jitter_tests(plugin):
+    print("\n== B22. 发送前扰动 ==")
+    import hashlib
+    from io import BytesIO
+
+    import numpy
+    from PIL import Image as PILImage
+
+    from astrbot_plugin_yandere_search.imaging import jitter_bytes
+
+    # 合成平滑渐变图（视觉变化可量化：几何/光度微扰下逐像素偏差应有界）
+    w, h = 320, 240
+    row = numpy.tile(numpy.linspace(30, 220, w, dtype=numpy.uint8), (h, 1))
+    grad = PILImage.fromarray(numpy.repeat(row[..., None], 3, axis=2), "RGB")
+    buf = BytesIO()
+    grad.save(buf, "PNG")
+    base = buf.getvalue()
+    arr0 = numpy.asarray(grad).astype(numpy.int16)
+
+    j1, j2 = jitter_bytes(base), jitter_bytes(base)
+    check("jitter: 输出是 webp", j1[:4] == b"RIFF" and j1[8:12] == b"WEBP", str(j1[:12]))
+    check("jitter: 两次输出字节不同(唯一性)", j1 != j2)
+    i1 = PILImage.open(BytesIO(j1))
+    check("jitter: 尺寸在容差内",
+          0.93 <= i1.width / w <= 1.04 and 0.93 <= i1.height / h <= 1.04,
+          f"{i1.size} vs {(w, h)}")
+    back = numpy.asarray(i1.convert("RGB").resize((w, h))).astype(numpy.int16)
+    diff = numpy.abs(back - arr0)
+    check("jitter: 像素偏差不可感知(均值<6 最大<60)",
+          float(diff.mean()) < 6.0 and int(diff.max()) < 60,
+          f"mean={float(diff.mean()):.2f} max={int(diff.max())}")
+
+    g1 = PILImage.new("RGB", (40, 30), (200, 100, 50))
+    g2 = PILImage.new("RGB", (40, 30), (50, 100, 200))
+    gbuf = BytesIO()
+    g1.save(gbuf, "GIF", save_all=True, append_images=[g2], duration=100, loop=0)
+    gif = gbuf.getvalue()
+    check("jitter: 动图透传", jitter_bytes(gif) == gif)
+
+    # _jitter_paths 文件级收口：jitter 目录、唯一、gif/开关/缺源回退
+    tmpdir = TMP / "jit"
+    tmpdir.mkdir(exist_ok=True)
+    srcs = []
+    for i in range(2):
+        p = tmpdir / f"post{i}_preview.png"
+        p.write_bytes(base)
+        srcs.append(str(p))
+    out = await plugin._jitter_paths(srcs)
+    check("jit: 产物在 jitter 目录且为 webp",
+          all(Path(x).parent.name == "jitter" and Path(x).suffix == ".webp" for x in out),
+          str(out))
+    check("jit: 原文件保留", all(Path(s).exists() for s in srcs))
+    mds = [hashlib.md5(Path(x).read_bytes()).hexdigest() for x in out]
+    check("jit: 每次产物唯一", len(set(mds)) == 2, str(mds))
+    out2 = await plugin._jitter_paths(srcs)
+    check("jit: 同源两次发送字节不同",
+          [hashlib.md5(Path(x).read_bytes()).hexdigest() for x in out2] != mds)
+    gp = tmpdir / "anim.gif"
+    gp.write_bytes(gif)
+    check("jit: gif 路径透传", (await plugin._jitter_paths([str(gp)]))[0] == str(gp))
+    plugin.config.update(anti_block_enabled=False)
+    check("jit: 开关关闭原样返回", (await plugin._jitter_paths(srcs)) == srcs)
+    plugin.config.update(anti_block_enabled=True)
+    miss = [str(tmpdir / "nope.png")]
+    check("jit: 扰动失败回退原图", (await plugin._jitter_paths(miss)) == miss)
+
+    # 发送链路集成：/p 出图走扰动副本（与缓存原文件不同字节）
+    stub = StubBooru()
+    real = plugin._clients.get("yandere")
+    plugin._clients["yandere"] = stub
+    try:
+        stub.search_results = [[mk_post(160)]]
+        ev = FakeEvent(umo=fresh_umo("jb1"))
+        await drive(s_random(plugin, ev, "猫娘 1"))
+        sent1 = [comp.file for ch in chains(ev) for comp in ch if getattr(comp, "file", None)]
+        check("jit: /p 发送走扰动副本",
+              sent1 and all("jitter" in p and p.endswith(".webp") for p in sent1), str(sent1))
+        stub.search_results = [[mk_post(160)]]  # 同帖：下载走缓存，发送仍应唯一
+        ev2 = FakeEvent(umo=fresh_umo("jb2"))
+        await drive(s_random(plugin, ev2, "猫娘 1"))
+        sent2 = [comp.file for ch in chains(ev2) for comp in ch if getattr(comp, "file", None)]
+        check("jit: 同图两次发送字节不同(缓存命中仍唯一)",
+              sent1 and sent2
+              and Path(sent1[0]).read_bytes() != Path(sent2[0]).read_bytes(),
+              f"{sent1} | {sent2}")
+    finally:
+        plugin._clients["yandere"] = real
+
+
 async def main() -> None:
     ctx = FakeContext()
     plugin = m.YandereSearchPlugin(ctx, dict(CFG))
@@ -1753,6 +1845,7 @@ async def main() -> None:
     await segment_flow(plugin)
     await fallback_tests(plugin)
     await rating_range_tests(plugin)
+    await jitter_tests(plugin)
     await section_c(plugin)
     snap("C")
     await section_d(plugin)

@@ -78,6 +78,11 @@
     "description": "WebP 质量（0-100）",
     "default": 95
   },
+  "anti_block_enabled": {
+    "type": "bool",
+    "description": "发送前扰动（防拦截）：对每张发送图做视觉不可感知的随机微扰（微裁边≤4px/缩放±1.5%/亮度对比度微调/细噪声）并重编码为唯一 WebP——每次发送字节与感知指纹都不同，规避平台按 md5/指纹的图片拦截。动图不受影响",
+    "default": true
+  },
   "forward_threshold": {
     "type": "int",
     "description": "图片数达到该值时用合并转发发送（0=关闭；仅 aiocqhttp，失败自动回退逐张）",

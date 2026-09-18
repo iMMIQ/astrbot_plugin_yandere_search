@@ -3,6 +3,7 @@ import asyncio
 import json
 import re
 import time
+import uuid
 from pathlib import Path
 
 from astrbot.api import AstrBotConfig, logger
@@ -195,6 +196,14 @@ class YandereSearchPlugin(Star):
         if self.embedder:
             await self.embedder.close()
         self.gov.close()
+        # 扰动是一次性发送副本，卸载时整体清掉
+        jdir = self.cache_dir / "jitter"
+        if jdir.is_dir():
+            for f in jdir.iterdir():
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
 
     # ---------- 基础设施 ----------
 
@@ -403,10 +412,53 @@ class YandereSearchPlugin(Star):
         )
         return dest
 
+    async def _jitter_paths(self, paths: list) -> list[str]:
+        """发送前扰动（anti_block）：为每个发送文件生成字节级唯一的 webp 副本。
+
+        规避平台按文件 md5/感知指纹的图片拦截——缓存命中的图每次发送字节
+        完全相同，被标记一次即反复命中。副本写入 cache/jitter/，清理超过
+        1 小时的遗留（发送是异步管道，发完立刻删会踩文件还没读的竞态）。
+        未启用/动图/扰动失败时原样返回原路径。"""
+        out = [str(p) for p in paths]
+        if not self.config.get("anti_block_enabled", True):
+            return out
+        jobs = [(i, Path(p)) for i, p in enumerate(out)
+                if not p.lower().endswith(".gif")]
+        if not jobs:
+            return out
+        from .imaging import jitter_bytes
+
+        jdir = self.cache_dir / "jitter"
+        jdir.mkdir(parents=True, exist_ok=True)
+        now = time.time()
+        for old in jdir.iterdir():
+            try:
+                if old.is_file() and now - old.stat().st_mtime > 3600:
+                    old.unlink()
+            except OSError:
+                pass
+
+        def _one(src: Path) -> str:
+            dest = jdir / f"{src.stem}_{uuid.uuid4().hex[:8]}.webp"
+            dest.write_bytes(jitter_bytes(src.read_bytes()))
+            return str(dest)
+
+        results = await asyncio.gather(
+            *(asyncio.to_thread(_one, src) for _, src in jobs),
+            return_exceptions=True,
+        )
+        for (idx, src), r in zip(jobs, results):
+            if isinstance(r, Exception):
+                logger.warning(f"[yandere] 扰动失败，原图直发: {src.name}: {r}")
+            else:
+                out[idx] = r
+        return out
+
     async def _emit_images(self, event: AstrMessageEvent, paths: list):
         """发送图片：达到阈值且会话允许时合并转发（仅 aiocqhttp），失败回退逐张。"""
         from astrbot.api.all import Image
 
+        paths = await self._jitter_paths(paths)
         chat = self.gov.get_chat(self._chat_key(event))
         thr = int(self.config.get("forward_threshold", 3))
         if chat["forward"] and thr > 0 and len(paths) >= thr:
@@ -1178,8 +1230,9 @@ class YandereSearchPlugin(Star):
                 if RATING_ORDER.get(post.get("rating"), 0) <= RATING_ORDER.get(cap, 0):
                     try:
                         path = await self._materialize(post)
+                        path = (await self._jitter_paths([path]))[0]
                         from astrbot.api.all import Image
-                        yield event.chain_result([Image.fromFileSystem(str(path))])
+                        yield event.chain_result([Image.fromFileSystem(path)])
                         self.gov.record_usage(umo, event.get_sender_id(), 1)
                     except Exception as exc:
                         logger.warning(f"[yandere] 反搜补图失败: {exc}")
