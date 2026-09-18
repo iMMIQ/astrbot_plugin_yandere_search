@@ -40,13 +40,13 @@ class LoliconClient:
         rating: str = "s",
         exclude: set[int] | None = None,
     ) -> list[dict[str, Any]]:
-        """按标签取帖。rating: s/q→r18=0，e→r18=1。返回插件统一 post 结构。"""
+        """按标签取帖。rating: s/q/-e→r18=0，e→r18=1，all→r18=2(混合)。返回插件统一 post 结构。"""
         params: dict[str, Any] = {
             "num": max(1, min(int(limit), 20)),
             "size": "regular",
             "excludeAI": "false",
         }
-        params["r18"] = 1 if rating == "e" else 0
+        params["r18"] = {"e": 1, "all": 2}.get(str(rating).lower(), 0)
         if tags:
             params["tag"] = list(tags)
         if self._key:

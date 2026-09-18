@@ -9,6 +9,7 @@
   A. 单元: _parse 全语法 / _rating_cap 群私聊矩阵 / 词表翻译 / LLM 校验
   B. 离线命令流(StubBooru): 连写重试 / 空结果双诊断 / 热门跨天回补 /
      下一张游标推进与耗尽 / 收藏越界 / 订阅推送去重·空推·失败
+  B18/B19. 嵌入语义层 / 连写拆词；B20. 国内源回退竞速；B21. 默认分级范围
   C. 治理: 白名单 e / 冷却·配额管理员豁免 / 总开关 / 历史 TTL
   D. 反搜(MockTransport): SauceNAO 解析 / iqdb multipart+解析 / 去重合并 /
      CF 退避 / 每日配额门 / 命中本站自动补图(分级门)
@@ -1598,6 +1599,126 @@ async def fallback_tests(plugin):
         plugin._clients.pop("lolicon", None)
 
 
+# ---------------- B21. 默认分级范围（不写分级=搜上限内所有等级） ----------------
+
+async def rating_range_tests(plugin):
+    print("\n== B21. 默认分级范围 ==")
+    stub = StubBooru()
+    real = plugin._clients.get("yandere")
+    plugin._clients["yandere"] = stub
+    loli = StubLolicon()
+    plugin._clients["lolicon"] = loli
+    try:
+        plugin.config.update(fallback_sites="", fallback_headstart=8, deadline_seconds=24)
+
+        # 1) booru 查询构造：all 不加分级标签；-e 排除 e；用户显式 rating 优先于范围值
+        c = MoebooruClient(timeout=5)
+        q_all = c._build_query(["catgirl"], rating="all")
+        q_ne = c._build_query(["catgirl"], rating="-e")
+        q_user = c._build_query(["rating:e"], rating="all")
+        check("range: all 不加分级标签", q_all == ["catgirl"], str(q_all))
+        check("range: -e 排除e", q_ne == ["catgirl", "-rating:e"], str(q_ne))
+        check("range: 单级照旧", c._build_query(["catgirl"], rating="q") == ["catgirl", "rating:q"])
+        check("range: 用户显式rating优先", q_user == ["rating:e"], str(q_user))
+        await c.close()
+
+        # 2) r18 解锁群默认 /p：搜 all（s/q/e 混合），不再只搜 e
+        umo = fresh_umo("rg1")
+        plugin.gov.set_chat(umo, r18_ok=1, rating_cap="e")
+        stub.search_results = [[mk_post(150)]]
+        ev = FakeEvent(umo=umo)
+        await drive(s_random(plugin, ev, "猫娘 1"))
+        check("range: r18群默认all", stub.search_calls[-1][3] == "all", str(stub.search_calls[-1]))
+        check("range: 回显rating:all", "rating:all" in plains(ev)[0], str(plains(ev)[:1]))
+
+        # 3) 上限 q 的群默认：-e（s+q）
+        umo = fresh_umo("rg2")
+        plugin.gov.set_chat(umo, rating_cap="q")
+        stub.search_results = [[mk_post(151)]]
+        ev = FakeEvent(umo=umo)
+        await drive(s_random(plugin, ev, "猫娘 1"))
+        check("range: q群默认-e", stub.search_calls[-1][3] == "-e", str(stub.search_calls[-1]))
+        check("range: 回显s+q", "rating:s+q" in plains(ev)[0], str(plains(ev)[:1]))
+
+        # 4) 上限 s 的群默认仍是 rating:s
+        stub.search_results = [[mk_post(152)]]
+        ev = FakeEvent(umo=fresh_umo("rg3"))
+        await drive(s_random(plugin, ev, "猫娘 1"))
+        check("range: s群默认s", stub.search_calls[-1][3] == "s", str(stub.search_calls[-1]))
+
+        # 5) 私聊上限 e（row 覆盖）→ 默认同样 all
+        umo = fresh_umo("rg4")
+        plugin.gov.set_chat(umo, rating_cap="e")
+        stub.search_results = [[mk_post(153)]]
+        ev = FakeEvent(umo=umo, group=False)
+        await drive(s_random(plugin, ev, "猫娘 1"))
+        check("range: 私聊e默认all", stub.search_calls[-1][3] == "all", str(stub.search_calls[-1]))
+
+        # 6) 显式 r18 在 s 群仍降级并提示解锁（老行为不变）
+        stub.search_results = [[mk_post(154)]]
+        ev = FakeEvent(umo=fresh_umo("rg5"))
+        await drive(s_random(plugin, ev, "猫娘 r18 1"))
+        check("range: 显式r18仍受上限", stub.search_calls[-1][3] == "s"
+              and any("/搜图设置 r18 on" in t for t in plains(ev)), str(plains(ev)))
+
+        # 7) all 范围空结果：跳过「共有N张/加r18」分级诊断，直接走标签提示
+        stub.search_results = [[]]
+        stub.count_value = 42
+        umo = fresh_umo("rg6")
+        plugin.gov.set_chat(umo, r18_ok=1, rating_cap="e")
+        ev = FakeEvent(umo=umo)
+        await drive(s_random(plugin, ev, "猫娘 1"))
+        check("range: all空结果跳过分级诊断", not any("共有" in t for t in plains(ev)),
+              str(plains(ev)))
+        # 同样空结果但范围是 -e：分级诊断仍生效（提示内容不在 e 范围内）
+        stub.search_results = [[]]
+        umo = fresh_umo("rg7")
+        plugin.gov.set_chat(umo, rating_cap="q")
+        ev = FakeEvent(umo=umo)
+        await drive(s_random(plugin, ev, "猫娘 1"))
+        check("range: -e空结果保留分级诊断", any("共有 42 张" in t for t in plains(ev)),
+              str(plains(ev)))
+        stub.count_value = 0
+
+        # 8) 竞速回退：r18 群默认范围 all 原样传给 lolicon 源
+        plugin.config.update(fallback_sites="lolicon", fallback_headstart=0.4, deadline_seconds=6)
+
+        async def slow_hi(pid, q):
+            await asyncio.sleep(8)
+
+        stub.fetch_hook = slow_hi
+        loli.scripted[("猫娘",)] = [loli.mk_loli(9100)]
+        umo = fresh_umo("rg8")
+        plugin.gov.set_chat(umo, r18_ok=1, rating_cap="e")
+        stub.search_results = [[mk_post(155)]]
+        ev = FakeEvent(umo=umo)
+        await drive(s_random(plugin, ev, "猫娘 1"))
+        check("range: 回退源收到all", loli.calls and loli.calls[-1][2] == "all", str(loli.calls))
+        stub.fetch_hook = None
+
+        # 9) 真实 LoliconClient 参数映射：all→r18=2（混合），-e→0，e→1（离线 MockTransport）
+        from astrbot_plugin_yandere_search.lolicon import LoliconClient
+        captured = {}
+
+        def loli_handler(request: httpx.Request) -> httpx.Response:
+            captured.update(dict(request.url.params))
+            return httpx.Response(200, json={"error": "", "data": []})
+
+        lc = LoliconClient(timeout=5)
+        lc._client = httpx.AsyncClient(transport=httpx.MockTransport(loli_handler), trust_env=False)
+        await lc.search(["catgirl"], limit=1, rating="all")
+        check("range: lolicon all→r18=2", captured.get("r18") == "2", str(captured))
+        await lc.search(["catgirl"], limit=1, rating="-e")
+        check("range: lolicon -e→r18=0", captured.get("r18") == "0", str(captured))
+        await lc.search(["catgirl"], limit=1, rating="e")
+        check("range: lolicon e→r18=1", captured.get("r18") == "1", str(captured))
+        await lc.close()
+    finally:
+        plugin.config.update(fallback_sites="", fallback_headstart=8, deadline_seconds=24)
+        plugin._clients["yandere"] = real
+        plugin._clients.pop("lolicon", None)
+
+
 async def main() -> None:
     ctx = FakeContext()
     plugin = m.YandereSearchPlugin(ctx, dict(CFG))
@@ -1631,6 +1752,7 @@ async def main() -> None:
     segment_unit(plugin)
     await segment_flow(plugin)
     await fallback_tests(plugin)
+    await rating_range_tests(plugin)
     await section_c(plugin)
     snap("C")
     await section_d(plugin)

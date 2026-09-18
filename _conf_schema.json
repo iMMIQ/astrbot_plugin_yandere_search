@@ -16,13 +16,13 @@
   },
   "default_rating": {
     "type": "string",
-    "description": "私聊与无覆盖会话的默认分级：s=全年龄 / q=擦边 / e=明确涩图。群聊上限另见 group_rating_cap",
+    "description": "私聊与无覆盖会话的分级上限：s=全年龄 / q=擦边 / e=R18。命令里不写分级时默认搜上限内所有等级（如上限 e 则 s/q/e 混合）",
     "default": "s",
     "options": ["s", "q", "e"]
   },
   "group_rating_cap": {
     "type": "string",
-    "description": "群聊会话的默认分级上限；管理员可用 /搜图设置 rating 按会话覆盖（开到 e 需 r18_whitelist）",
+    "description": "群聊会话的分级上限；管理员可用 /搜图设置 rating 按会话覆盖（开到 e 需 r18_whitelist 或 /搜图设置 r18 on）。不写分级默认搜上限内所有等级",
     "default": "s",
     "options": ["s", "q", "e"]
   },

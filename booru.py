@@ -103,7 +103,13 @@ class MoebooruClient:
             else:
                 query.append(t)
         if rating and not has_rating:
-            query.append(f"rating:{RATING_MAP.get(rating.lower(), 's')}")
+            r = rating.lower()
+            if r == "all":
+                pass  # 范围值 all：搜全部等级，不加分级标签
+            elif r == "-e":
+                query.append("-rating:e")  # 范围值：上限 q，搜 s+q
+            else:
+                query.append(f"rating:{RATING_MAP.get(r, 's')}")
         if order in ("score", "random"):
             query.append(f"order:{order}")
         return query

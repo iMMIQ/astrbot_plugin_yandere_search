@@ -30,7 +30,8 @@
 | `/搜图帮助` | `/dbhelp` | 命令总表 |
 
 语法要点：数量后缀 1-5；多词为 AND（空结果时自动 `_` 连写重试）；分级直觉词
-`r18`/`涩图`/`擦边`/`全年龄`（或 `rating:e`）、排序词 `精选` 和 `site:` 不占标签位。
+`r18`/`涩图`/`擦边`/`全年龄`（或 `rating:e`）、排序词 `精选` 和 `site:` 不占标签位；
+不写分级时默认搜本会话上限内所有等级（r18 群默认混出 s/q/e，回显 `rating:all`）。
 
 管理员在插件配置 `admin_users` 里设置（逗号/空格分隔 QQ 号），AstrBot 管理员自动兼容。
 
@@ -63,7 +64,9 @@ python3 tools/build_embed_index.py
 
 - **分级上限**：群默认 `group_rating_cap`（s），私聊默认 `default_rating`；
   管理员按会话覆盖。e 级解锁 = 配置 `r18_whitelist` ∪ 管理员 `/搜图设置 r18 on`
-  （存库，二者并集）；查询超上限自动降级并提示解锁方法
+  （存库，二者并集）；显式查询超上限自动降级并提示解锁方法。命令里不写分级时
+  默认搜上限内所有等级：上限 e → 不加分级过滤（回显 `rating:all`），上限 q →
+  排除 e（`rating:s+q`），上限 s → 仅 s
 - **频控**：会话冷却（默认 8s，管理员豁免）+ 每人每日图量配额（默认 80）
 - 状态存 `data/plugin_data/astrbot_plugin_yandere_search/state.db`（sqlite WAL）
 

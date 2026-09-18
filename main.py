@@ -22,7 +22,8 @@ PLUGIN_NAME = "astrbot_plugin_yandere_search"
 
 HELP_TEXT = """📖 yande.re 找图 · 命令一览
 搜图: /p 猫娘 3        (默认随机；加 精选 走质量优先)
-分级: 词尾直接加 r18 / 涩图 / 擦边 / 全年龄 (或 rating:e，受会话上限约束)
+分级: 词尾直接加 r18 / 涩图 / 擦边 / 全年龄 (或 rating:e，受会话上限约束)；
+      不写分级默认搜上限内所有等级（r18 群默认混出 s/q/e）
 热门: /热门 本周 5      (别名 /hot；今日/本周/本月)
 续看: /下一张 2         (别名 /next，上次搜索后 10 分钟内有效)
 查词: /标签 巨乳        (别名 /tag，中英双向 + 站内数量)
@@ -73,6 +74,10 @@ ZH_TAG_MAP = {
 }
 
 RATING_HINT = {"s": "全年龄", "q": "擦边", "e": "R18"}
+# 未显式指定分级时的默认范围：搜本会话上限内「所有」等级，而不是只搜上限那一级
+# （否则 r18 解锁的群默认 /p 只出 e 图）。booru: all=不加分级标签、-e=-rating:e(s+q)；
+# lolicon: all→r18=2 混合、-e→r18=0
+RATING_DEFAULT_RANGE = {"s": "s", "q": "-e", "e": "all"}
 # 多词搜索的口语连接词：yande.re 多标签本身即 AND 交集，连接词直接丢弃
 TAG_CONNECTORS = {"and", "与", "和", "还有", "plus"}
 # yande.re 站内确定不存在的概念（2026-09 词表校准实测：发色/发型标签基本无人打，
@@ -255,6 +260,15 @@ class YandereSearchPlugin(Star):
         if self._is_group(event):
             return str(self.config.get("group_rating_cap", "s"))
         return str(self.config.get("default_rating", "s"))
+
+    @staticmethod
+    def _rating_disp(eff: str) -> str:
+        """回显里的分级展示：范围值 all/-e 也转成可读形式。"""
+        if eff == "all":
+            return "rating:all"
+        if eff == "-e":
+            return "rating:s+q"
+        return f"rating:{eff}" + (f"·{RATING_HINT[eff]}" if eff in ("q", "e") else "")
 
     def _r18_allowed(self, umo: str) -> bool:
         """e 级解锁 = 配置 r18_whitelist ∪ 管理员 /搜图设置 r18 on 的会话标记。"""
@@ -641,10 +655,12 @@ class YandereSearchPlugin(Star):
             return
         site = site or self.default_site
         cap = self._rating_cap(event, chat)
-        requested = rating_req or (
-            str(self.config.get("default_rating", "s")) if not self._is_group(event) else cap
-        )
-        eff = min([requested, cap], key=lambda r: RATING_ORDER.get(r, 0))
+        if rating_req:
+            requested = rating_req
+            eff = min([requested, cap], key=lambda r: RATING_ORDER.get(r, 0))
+        else:
+            # 不写分级 = 搜上限内所有等级（r18 群默认混出 s/q/e，不再只搜 e）
+            requested = eff = RATING_DEFAULT_RANGE.get(cap, "s")
         degraded = eff != requested
         effective_order = order
 
@@ -741,7 +757,6 @@ class YandereSearchPlugin(Star):
                     yield msg
             return
 
-        eff_rating = eff
         site_tag = f"[{SITES[res['site']]['label']}] " if res["site"] != self.default_site else ""
         if degraded:
             degrade_note = (
@@ -752,9 +767,7 @@ class YandereSearchPlugin(Star):
         else:
             degrade_note = ""
         cap_note = f"（一次最多 {count} 张）" if asked_n and asked_n > count else ""
-        rating_disp = f"rating:{eff_rating}" + (
-            f"·{RATING_HINT[eff_rating]}" if eff_rating in ("q", "e") else ""
-        )
+        rating_disp = self._rating_disp(eff)
         logger.info(
             f"[yandere] 取图就绪[{res['site']}]: 搜索 {res['search_s']:.1f}s "
             f"下载+转码 {res['mat_s']:.1f}s（{len(res['posts'])} 张）"
@@ -895,14 +908,15 @@ class YandereSearchPlugin(Star):
         client = self.client(site)
         user_set_rating = any(t.lower().startswith("rating:") for t in tags)
         query_echo = " AND ".join(tags)
-        if not user_set_rating:
+        if not user_set_rating and rating != "all":
+            # all 范围已含所有等级，"add r18 to adjust" no longer makes sense, skip straight to tag suggestion
             try:
                 total = await client.count(tags)
             except BooruError:
                 total = -1
             if total > 0:
                 yield event.plain_result(
-                    f"『{query_echo}』在分级 rating:{rating} 下没有图，"
+                    f"『{query_echo}』在分级 {self._rating_disp(rating)} 下没有图，"
                     f"但该标签共有 {total} 张——内容基本都不在这个分级里。\n"
                     f"显式加 r18 / 擦边 / rating:e 可调整（如 /p {query_echo} r18）"
                 )

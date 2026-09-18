@@ -2,7 +2,7 @@ name: astrbot_plugin_yandere_search
 display_name: yande.re 找图
 short_desc: "yande.re 搜图全家桶：标签/随机/热门/续看/查词/反搜/订阅/收藏，分级治理+中文词表+语义标签匹配"
 desc: "一站式搜图聚合：/p 搜图（默认随机，加 精选 走质量优先）/热门 /下一张 /标签 /搜原图（SauceNAO+iqdb 反搜）/订阅推送/收藏，会话级分级上限、冷却与每日配额治理，≥3 图合并转发，内置近2万条经 yande.re 真实标签库校准的中文标签自动翻译，词表未命中自动走 bge 嵌入召回+重排的语义匹配（RAG，复用 AstrBot 已配嵌入/重排服务），连写自动拆词；yande.re 慢/挂时自动竞速回退国内源 Lolicon(pixiv) 并以全局截止时钟保证 30s 内出图。"
-version: 2.5.0
+version: 2.6.0
 author: immiq
 repo: https://github.com/iMMIQ/astrbot_plugin_yandere_search
 astrbot_version: ">=4.16"
